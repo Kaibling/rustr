@@ -1,5 +1,5 @@
-use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
+use std::time::SystemTime;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Event {
@@ -10,9 +10,9 @@ pub struct Event {
     tags: String,
     content: String,
     sig: String,
+    // circle
+    // expires_at: u64;
 }
-
-
 
 impl Event {
     pub fn sign(&mut self, private_key: String) {
@@ -52,11 +52,9 @@ impl Event {
     }
 }
 
-
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
-    name: String,
+    pub name: String,
     pub public_key: String,
 }
 

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use dyn_clone::DynClone;
 use entity::Event;
 use entity::User;
-use dyn_clone::DynClone;
+use std::collections::HashMap;
 
 dyn_clone::clone_trait_object!(UserRepo);
 pub trait EventRepo {
@@ -9,7 +9,7 @@ pub trait EventRepo {
     fn read_event(&self, public_key: &String) -> Option<&Event>;
     fn read_all_events(&self) -> Vec<Event>;
 }
-#[derive( Clone)]
+#[derive(Clone)]
 pub struct EventRepoInMemory {
     events: HashMap<String, Event>,
 }
@@ -37,10 +37,10 @@ impl EventRepoInMemory {
         };
     }
 }
-pub trait UserRepo: DynClone  {
+pub trait UserRepo: DynClone {
     fn add_user(&mut self, u: User);
     fn read_user(&self, public_key: &String) -> Option<&User>;
-    fn read_all_user(&self) -> Vec<User>;
+    fn read_all_users(&self) -> Vec<User>;
     //fn Clone(&self) -> dyn UserRepo;
 }
 #[derive(Clone)]
@@ -50,13 +50,14 @@ pub struct UserRepoInMemory {
 
 impl UserRepo for UserRepoInMemory {
     fn add_user(&mut self, u: User) {
+        println!("adding user {}", &u.name);
         let n = u.public_key.clone();
         self.users.insert(n, u);
     }
     fn read_user(&self, public_key: &String) -> Option<&User> {
         return self.users.get(public_key);
     }
-    fn read_all_user(&self) -> Vec<User> {
+    fn read_all_users(&self) -> Vec<User> {
         let mut res: Vec<User> = Vec::new();
         for (_, v) in &self.users {
             res.push(v.clone());

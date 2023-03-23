@@ -11,3 +11,5 @@ tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread"] }
 core = { path = "../core" }
 entity = { path = "../entity" }
 axum-macros = "0.3.7"
+tower-http = { version = "0.4.0", features = ["add-extension", "trace"] }
+tracing-subscriber = "0.3.16"

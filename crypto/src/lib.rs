@@ -4,7 +4,6 @@ use secp256k1::{Message, Secp256k1, SecretKey, XOnlyPublicKey};
 use sha256::digest;
 use std::str::FromStr;
 
-
 pub fn hash(s: String) -> String {
     return digest(s);
 }

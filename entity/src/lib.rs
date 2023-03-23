@@ -24,7 +24,6 @@ impl Event {
             "[0,{},{},{},{},{}]",
             self.public_key, self.created_at, self.kind, self.tags, self.content
         );
-        print!("{}\n", fmt_str);
         let sig_str = fmt_str.clone();
         self.id = crypto::hash(fmt_str);
         self.sig = crypto::sign_message(sig_str, private_key);

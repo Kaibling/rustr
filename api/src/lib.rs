@@ -6,24 +6,24 @@ use axum::{
     Json, Router,
 };
 use core::repository;
-use entity::User;
+use entity::{User,Event};
 use std::sync::{Arc, Mutex};
 use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
 pub struct AppState {
     user_repo: Arc<Mutex<Box<dyn repository::UserRepo + Send + Sync>>>,
-    //event_repo: Mutex<Box<dyn repository::EventRepo + Send + Sync>>,
+    event_repo: Arc<Mutex<Box<dyn repository::EventRepo + Send + Sync>>>,
 }
 
 #[tokio::main]
 pub async fn main() {
     let ur = repository::UserRepoInMemory::new();
-    //let er = repository::EventRepoInMemory::new();
+    let er = repository::EventRepoInMemory::new();
 
     let app_state = AppState {
         user_repo: Arc::new(Mutex::new(Box::new(ur))),
-        // event_repo: Mutex::new(Box::new(er)),
+        event_repo: Arc::new(Mutex::new(Box::new(er))),
     };
     tracing_subscriber::fmt::init();
     let app = Router::new()
@@ -31,6 +31,9 @@ pub async fn main() {
         .route("/users/:id", get(read_user))
         .route("/users", get(read_users))
         .route("/users", post(save_user))
+        .route("/events/:id", get(read_event))
+        .route("/events", get(read_events))
+        .route("/events", post(save_event))
         .layer(TraceLayer::new_for_http())
         .with_state(app_state)
         .fallback(handler_404);
@@ -40,6 +43,10 @@ pub async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+async fn handler_404() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "nothing to see here")
 }
 
 //#[axum_macros::debug_handler]
@@ -66,11 +73,40 @@ async fn save_user(State(state): State<AppState>, payload: axum::extract::Json<U
     r.add_user(payload);
 }
 
-async fn handler_404() -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, "nothing to see here")
-}
+
 
 async fn read_users(State(state): State<AppState>) -> Json<Vec<User>> {
     let users = state.user_repo.lock().expect("mutex was poisoned");
     Json(users.read_all_users())
+}
+
+
+async fn read_event(
+    Path(user_id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<Event>, (StatusCode, String)> {
+    let r = state.event_repo.lock().expect("mutex was poisoned");
+    let event = r.read_event(&user_id);
+    if event.is_some() {
+        Ok(Json(event.unwrap().to_owned()))
+    } else {
+        Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Unknown error".to_string(),
+        ))
+    }
+}
+
+async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<Event>) {
+    println!("->{:?}", &payload);
+    let payload: Event = payload.0;
+    let mut r = state.event_repo.lock().expect("mutex was poisoned");
+    r.add_event(payload);
+}
+
+
+
+async fn read_events(State(state): State<AppState>) -> Json<Vec<Event>> {
+    let events = state.event_repo.lock().expect("mutex was poisoned");
+    Json(events.read_all_events())
 }

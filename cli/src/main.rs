@@ -21,8 +21,7 @@ struct Args {
 
 
 fn main() {
-    println!("Hello, world!");
-    let args = Args::parse();
+        let args = Args::parse();
     if args.generate_key {
         let (private_key, public_key) = create_key_pair();
         let kp = KeyPair{private_key,public_key};
@@ -30,8 +29,22 @@ fn main() {
         fs::write(&args.key_file, serialized_kp).expect("Unable to write file");
         return;
     }
+    if args.content == "" {
+        println!("-c content missing");
+        return;
+    }
     // read keyfile
-    let data = fs::read_to_string(&args.key_file).expect("Unable to read file");
+    let mut  data = "".to_string() ;
+    let opt_data =  fs::read_to_string(&args.key_file);
+    if !opt_data.is_ok(){
+        println!("{}",opt_data.err().unwrap());
+        return;
+    } else {
+        data = opt_data.unwrap();
+    }
+
+
+    //.expect("Unable to read file");
     let key_pair: KeyPair = serde_json::from_str(&data).unwrap();
     let mut  e = Event::new(key_pair.public_key, args.content);
     e.sign(key_pair.private_key);

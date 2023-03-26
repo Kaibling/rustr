@@ -13,3 +13,4 @@ entity = { path = "../entity" }
 axum-macros = "0.3.7"
 tower-http = { version = "0.4.0", features = ["add-extension", "trace"] }
 tracing-subscriber = "0.3.16"
+tracing = "0.1.37"

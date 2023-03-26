@@ -9,7 +9,7 @@ use core::repository;
 use entity::{User,Event};
 use std::sync::{Arc, Mutex};
 use tower_http::trace::TraceLayer;
-
+use tracing::{span, Level,event};
 #[derive(Clone)]
 pub struct AppState {
     user_repo: Arc<Mutex<Box<dyn repository::UserRepo + Send + Sync>>>,
@@ -25,7 +25,10 @@ pub async fn main() {
         user_repo: Arc::new(Mutex::new(Box::new(ur))),
         event_repo: Arc::new(Mutex::new(Box::new(er))),
     };
-    tracing_subscriber::fmt::init();
+    // tracing_subscriber::fmt()
+    // .with_max_level(tracing::Level::DEBUG)
+    // .init();
+tracing_subscriber::fmt::init();
     let app = Router::new()
         .route("/ping", get(|| async { "pong" }))
         .route("/users/:id", get(read_user))
@@ -37,9 +40,11 @@ pub async fn main() {
         .layer(TraceLayer::new_for_http())
         .with_state(app_state)
         .fallback(handler_404);
-
+    let listening_string ="0.0.0.0:3000";
+    let msg = format!("start listening on {}", listening_string);
+    event!(Level::INFO,msg);
     // run it with hyper on localhost:3000
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
+    axum::Server::bind(&listening_string.parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();

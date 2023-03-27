@@ -5,9 +5,10 @@ use std::collections::HashMap;
 
 dyn_clone::clone_trait_object!(UserRepo);
 pub trait EventRepo {
-    fn add_event(&mut self, e: Event);
-    fn read_event(&self, id: &String) -> Option<&Event>;
-    fn read_all_events(&self) -> Vec<Event>;
+    fn add(&mut self, e: Event);
+    fn read(&mut self, id: &String) -> Option<Event>;
+    fn read_all(&mut self) -> Vec<Event>;
+    fn delete(&mut self,id:&String);
 }
 #[derive(Clone)]
 pub struct EventRepoInMemory {
@@ -15,19 +16,40 @@ pub struct EventRepoInMemory {
 }
 
 impl EventRepo for EventRepoInMemory {
-    fn add_event(&mut self, u: Event) {
+    fn add(&mut self, u: Event) {
         let n = u.get_id();
         self.events.insert(n, u);
     }
-    fn read_event(&self, id: &String) -> Option<&Event> {
-        return self.events.get(id);
+    fn read(&mut self, id: &String) -> Option<Event> {
+        match self.events.get(id) {
+            Some(e) => {
+                let oe = e.to_owned();
+                if oe.expired(){
+                    self.delete(&oe.id);
+                }
+                return Some(oe)
+            },
+            None => return None,
+
+        }
     }
-    fn read_all_events(&self) -> Vec<Event> {
+    fn read_all(&mut self) -> Vec<Event> {
         let mut res: Vec<Event> = Vec::new();
+        let mut obsoletes: Vec<String> = Vec::new();
         for (_, v) in &self.events {
-            res.push(v.clone());
+            if !v.expired(){
+                res.push(v.clone());
+            } else {
+                obsoletes.push(v.id.clone());
+            }
+        }
+        for  v in obsoletes {
+            self.delete(&v);
         }
         return res;
+    }
+    fn delete(&mut self,id: &String) {
+        self.events.remove(id);
     }
 }
 impl EventRepoInMemory {

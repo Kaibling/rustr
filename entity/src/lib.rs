@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Event {
     pub id: String,
@@ -48,6 +49,12 @@ impl Event {
     }
     pub fn get_id(&self) -> String {
         self.id.clone()
+    }
+    pub fn expired(&self) -> bool {
+        return  SystemTime::now().
+        duration_since(SystemTime::UNIX_EPOCH).
+        expect("msg").
+        as_secs() >=self.created_at
     }
 }
 

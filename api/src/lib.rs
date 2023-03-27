@@ -88,17 +88,16 @@ async fn read_users(State(state): State<AppState>) -> Json<Vec<User>> {
 
 
 async fn read_event(
-    Path(user_id): Path<String>,
+    Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let r = state.event_repo.lock().expect("mutex was poisoned");
-    let event = r.read_event(&user_id);
-    if event.is_some() {
-        Ok(Json(event.unwrap().to_owned()))
-    } else {
-        Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Unknown error".to_string(),
+    let mut r = state.event_repo.lock().expect("mutex was poisoned");
+    match r.read(&id){
+        Some(event) => { 
+        return Ok(Json(event.to_owned()))},
+        None => return Err((
+            StatusCode::NOT_FOUND,
+            "event not found".to_string(),
         ))
     }
 }
@@ -108,7 +107,7 @@ async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<
     let payload: Event = payload.0;
     let msg = format!("save event {} content '{}'",payload.id,payload.content);
     let mut r = state.event_repo.lock().expect("mutex was poisoned");
-    r.add_event(payload);
+    r.add(payload);
     event!(Level::INFO,msg);
     return StatusCode::CREATED;
 }
@@ -116,6 +115,6 @@ async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<
 
 
 async fn read_events(State(state): State<AppState>) -> Json<Vec<Event>> {
-    let events = state.event_repo.lock().expect("mutex was poisoned");
-    Json(events.read_all_events())
+    let mut events = state.event_repo.lock().expect("mutex was poisoned");
+    Json(events.read_all())
 }

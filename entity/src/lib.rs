@@ -47,7 +47,7 @@ impl Event {
         };
     }
     pub fn get_id(&self) -> String {
-        self.public_key.clone()
+        self.id.clone()
     }
 }
 

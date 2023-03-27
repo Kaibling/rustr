@@ -6,7 +6,7 @@ use std::collections::HashMap;
 dyn_clone::clone_trait_object!(UserRepo);
 pub trait EventRepo {
     fn add_event(&mut self, e: Event);
-    fn read_event(&self, public_key: &String) -> Option<&Event>;
+    fn read_event(&self, id: &String) -> Option<&Event>;
     fn read_all_events(&self) -> Vec<Event>;
 }
 #[derive(Clone)]
@@ -19,8 +19,8 @@ impl EventRepo for EventRepoInMemory {
         let n = u.get_id();
         self.events.insert(n, u);
     }
-    fn read_event(&self, public_key: &String) -> Option<&Event> {
-        return self.events.get(public_key);
+    fn read_event(&self, id: &String) -> Option<&Event> {
+        return self.events.get(id);
     }
     fn read_all_events(&self) -> Vec<Event> {
         let mut res: Vec<Event> = Vec::new();

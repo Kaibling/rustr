@@ -12,7 +12,7 @@ pub struct Event {
     pub content: String,
     pub sig: String,
     // circle
-    // expires_at: u64;
+    pub expires_at: u64,
 }
 
 impl Event {
@@ -36,7 +36,7 @@ impl Event {
         );
         return crypto::verify_message(&fmt_str, &self.sig.clone(), &self.public_key.clone());
     }
-    pub fn new(public_key: String, content: String) -> Event {
+    pub fn new(public_key: String, content: String, expires_at: u64) -> Event {
         return Event {
             id: "".to_string(),
             public_key,
@@ -45,16 +45,20 @@ impl Event {
             tags: "".to_string(),
             content,
             sig: "".to_string(),
+            expires_at,
         };
     }
     pub fn get_id(&self) -> String {
         self.id.clone()
     }
     pub fn expired(&self) -> bool {
-        return  SystemTime::now().
-        duration_since(SystemTime::UNIX_EPOCH).
-        expect("msg").
-        as_secs() >=self.created_at
+        if self.expires_at != 0 {
+            return  SystemTime::now().
+            duration_since(SystemTime::UNIX_EPOCH).
+            expect("msg").
+            as_secs() >=self.expires_at
+        }
+        return false
     }
 }
 

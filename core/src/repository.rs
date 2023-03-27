@@ -2,7 +2,7 @@ use dyn_clone::DynClone;
 use entity::Event;
 use entity::User;
 use std::collections::HashMap;
-
+use tracing::event;
 dyn_clone::clone_trait_object!(UserRepo);
 pub trait EventRepo {
     fn add(&mut self, e: Event);
@@ -25,6 +25,8 @@ impl EventRepo for EventRepoInMemory {
             Some(e) => {
                 let oe = e.to_owned();
                 if oe.expired(){
+                    let msg = format!("deleting {}",oe.id);
+                    event!(tracing::Level::INFO,msg);
                     self.delete(&oe.id);
                 }
                 return Some(oe)
@@ -44,6 +46,8 @@ impl EventRepo for EventRepoInMemory {
             }
         }
         for  v in obsoletes {
+            let msg = format!("deleting {}",v);
+            event!(tracing::Level::INFO,msg);
             self.delete(&v);
         }
         return res;

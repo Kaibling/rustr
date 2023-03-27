@@ -7,6 +7,7 @@ use std::fs;
 use colored::*;
 use chrono::prelude::DateTime;
 use chrono::Utc;
+use chrono::NaiveDateTime;
 use std::time::{UNIX_EPOCH, Duration};
 
 #[derive(Parser, Debug)]
@@ -24,6 +25,8 @@ struct Args {
     users: bool,
     #[arg(short, long, default_value_t = String::from(""))]
     id: String,
+    #[arg(short='x', long, default_value_t = String::from("1970-01-01 00:00:00"))]
+    expiration_date: String,
 }
 
 fn main() {
@@ -60,7 +63,8 @@ fn main() {
         Err(err) => {println!("{}",err.to_string()); return;},
     };
     let key_pair: KeyPair = serde_json::from_str(&data).unwrap();
-    let mut e = Event::new(key_pair.public_key, args.content);
+    let expiration_time = from_pretty_time(args.expiration_date);
+    let mut e = Event::new(key_pair.public_key, args.content, expiration_time);
     e.sign(key_pair.private_key);
     create_event(e, &format!("{}/{}",&api_url,"events"));
 }
@@ -126,6 +130,7 @@ fn print_event(event: Event) {
     } else {
         String::from("✗").red()
     };
+    // show exporation_date
     println!("({})[{}] {}",valid,pretty_time(event.created_at),event.content);
 }
 
@@ -135,4 +140,9 @@ fn pretty_time(time_stamp : u64) -> String {
     let d = UNIX_EPOCH + Duration::from_secs(time_stamp);
     let datetime = DateTime::<Utc>::from(d);
     return datetime.format("%Y-%m-%d %H:%M:%S").to_string();
+}
+
+fn from_pretty_time(str_time: String) -> u64 {
+    let no_timezone = NaiveDateTime::parse_from_str(&str_time, "%Y-%m-%d %H:%M:%S").expect("s");
+    return no_timezone.timestamp().try_into().unwrap();
 }

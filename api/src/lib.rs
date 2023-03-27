@@ -71,11 +71,12 @@ async fn read_user(
     }
 }
 
-async fn save_user(State(state): State<AppState>, payload: axum::extract::Json<User>) {
+async fn save_user(State(state): State<AppState>, payload: axum::extract::Json<User>) -> StatusCode {
     println!("->{:?}", &payload);
     let payload: User = payload.0;
     let mut r = state.user_repo.lock().expect("mutex was poisoned");
     r.add_user(payload);
+    return StatusCode::CREATED;
 }
 
 
@@ -102,11 +103,14 @@ async fn read_event(
     }
 }
 
-async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<Event>) {
-    println!("->{:?}", &payload);
+async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<Event>) -> StatusCode {
+    //println!("->{:?}", &payload);
     let payload: Event = payload.0;
+    let msg = format!("save event {} content '{}'",payload.id,payload.content);
     let mut r = state.event_repo.lock().expect("mutex was poisoned");
     r.add_event(payload);
+    event!(Level::INFO,msg);
+    return StatusCode::CREATED;
 }
 
 

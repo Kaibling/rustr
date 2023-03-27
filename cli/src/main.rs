@@ -1,7 +1,7 @@
 use clap::Parser;
 use crypto::create_key_pair;
 use entity::Event;
-use reqwest::header::CONTENT_TYPE;
+use reqwest::{header::CONTENT_TYPE, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use colored::*;
@@ -19,9 +19,9 @@ struct Args {
     #[arg(short, long, default_value_t = false)]
     generate_key: bool,
     #[arg(short, long, default_value_t = false)]
-    read: bool,
-    #[arg(short, long, default_value_t = String::from("events"))]
-    object_type: String,
+    events: bool,
+    #[arg(short, long, default_value_t = false)]
+    users: bool,
     #[arg(short, long, default_value_t = String::from(""))]
     id: String,
 }
@@ -29,20 +29,16 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let api_url =  String::from("http://localhost:3000");
-    if args.read {
+    if args.events {
         if args.id == "" {
-            match args.object_type.as_str() {
-                "event" => read_all_events(&format!("{}/{}",&api_url,"events")),
-                _ => println!("default"),
-            }
+        read_all_events(&format!("{}/{}",&api_url,"events"));
         } else {
-            match args.object_type.as_str() {
-                "event" => read_single_event(args.id, &format!("{}/{}",&api_url,"events")),
-                _ => println!("default"),
-            }
+            read_single_event(args.id, &format!("{}/{}",&api_url,"events"));
         }
         return;
     }
+
+
 
     if args.generate_key {
         let (private_key, public_key) = create_key_pair();
@@ -83,13 +79,16 @@ struct GETAPIResponse {
 
 fn create_event(event: Event, url: &String) {
     let client = reqwest::blocking::Client::new();
-    let response_event = client
+    let response = client
         .post(url)
         .header(CONTENT_TYPE, "application/json")
         .json(&event)
         .send()
         .expect("dsd");
-    println!("{:#?}", response_event);
+    if response.status() != StatusCode::CREATED {
+        println!("{} status code", response.status());
+    }
+    //println!("{:#?}", response_event);
 }
 
 fn read_all_events(url: &String) {

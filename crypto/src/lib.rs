@@ -34,7 +34,7 @@ pub fn get_public_key(private_key: String) -> String {
     return secret_key.public_key(&secp).to_string();
 }
 
-pub fn verify_message(message: String, signature: String, public_key: String) -> bool {
+pub fn verify_message(message: &String, signature: &String, public_key: &String) -> bool {
     let mut pub_key = public_key.clone();
     pub_key.remove(0);
     pub_key.remove(0);
@@ -46,4 +46,20 @@ pub fn verify_message(message: String, signature: String, public_key: String) ->
     let sig = secp256k1::schnorr::Signature::from_slice(&decoded_signature).expect("TODO");
     let result = secp.verify_schnorr(&sig, &message, &xonly);
     return result.is_ok();
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let private_key = "88acc91b32ff8678417e1c4f1dc9904865d9f2732d8111ff98fd4978809e58ec".to_string();
+        let public_key = "036ccd001880d8938eed044baf4b8a0a7a081fea6b9c60f336aa8cf09f5b8ffa23".to_string();
+        let msg = "testString to test".to_string();
+        let sig = sign_message(msg.clone(),private_key.clone());
+        assert_eq!(verify_message(&msg,&sig,&public_key),true);
+    }
 }

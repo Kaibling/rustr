@@ -3,13 +3,13 @@ use std::time::SystemTime;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Event {
-    id: String,
-    public_key: String,
-    created_at: u64,
-    kind: u32,
-    tags: String,
-    content: String,
-    sig: String,
+    pub id: String,
+    pub public_key: String,
+    pub created_at: u64,
+    pub kind: u32,
+    pub tags: String,
+    pub content: String,
+    pub sig: String,
     // circle
     // expires_at: u64;
 }
@@ -33,7 +33,7 @@ impl Event {
             "[0,{},{},{},{},{}]",
             self.public_key, self.created_at, self.kind, self.tags, self.content
         );
-        return crypto::verify_message(fmt_str, self.sig.clone(), self.public_key.clone());
+        return crypto::verify_message(&fmt_str, &self.sig.clone(), &self.public_key.clone());
     }
     pub fn new(public_key: String, content: String) -> Event {
         return Event {

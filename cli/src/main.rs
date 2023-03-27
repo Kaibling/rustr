@@ -1,10 +1,13 @@
-
 use clap::Parser;
 use crypto::create_key_pair;
-use std::fs;
-use serde::{Deserialize, Serialize};
 use entity::Event;
 use reqwest::header::CONTENT_TYPE;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use colored::*;
+use chrono::prelude::DateTime;
+use chrono::Utc;
+use std::time::{UNIX_EPOCH, Duration};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -23,34 +26,30 @@ struct Args {
     id: String,
 }
 
-
-
-
 fn main() {
     let args = Args::parse();
-
+    let api_url =  String::from("http://localhost:3000");
     if args.read {
         if args.id == "" {
-            match args.object_type.as_str(){
-                "event" => read_all_events("http://localhost:3000/events".to_string()),
-                _=> println!("default")
+            match args.object_type.as_str() {
+                "event" => read_all_events(&format!("{}/{}",&api_url,"events")),
+                _ => println!("default"),
             }
         } else {
-            match args.object_type.as_str(){
-                "event" => read_all_events("http://localhost:3000/events".to_string()),
-                _=> println!("default")
+            match args.object_type.as_str() {
+                "event" => read_single_event(args.id, &format!("{}/{}",&api_url,"events")),
+                _ => println!("default"),
             }
         }
-
-       // if args.object_type == 
-
         return;
     }
 
-
     if args.generate_key {
         let (private_key, public_key) = create_key_pair();
-        let kp = KeyPair{private_key,public_key};
+        let kp = KeyPair {
+            private_key,
+            public_key,
+        };
         let serialized_kp = serde_json::to_string(&kp).unwrap();
         fs::write(&args.key_file, serialized_kp).expect("Unable to write file");
         return;
@@ -60,33 +59,18 @@ fn main() {
         return;
     }
     // read keyfile
-    let mut  data = "".to_string() ;
-    let opt_data =  fs::read_to_string(&args.key_file);
-    if !opt_data.is_ok(){
-        println!("{}",opt_data.err().unwrap());
-        return;
-    } else {
-        data = opt_data.unwrap();
-    }
-
-
-    //.expect("Unable to read file");
+    let data = match fs::read_to_string(&args.key_file) {
+        Ok(val) => val,
+        Err(err) => {println!("{}",err.to_string()); return;},
+    };
     let key_pair: KeyPair = serde_json::from_str(&data).unwrap();
-    let mut  e = Event::new(key_pair.public_key, args.content);
+    let mut e = Event::new(key_pair.public_key, args.content);
     e.sign(key_pair.private_key);
-   
-    
-    println!(" {:?} ",e);
-
-    create_event(e,"http://localhost:3000/events".to_string());
+    create_event(e, &format!("{}/{}",&api_url,"events"));
 }
 
 
-// cli -c "dfs fs s fgdg dfg dg" -k 
-// cli -g
-
-#[derive(Serialize, Deserialize)]
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 struct KeyPair {
     public_key: String,
     private_key: String,
@@ -97,38 +81,59 @@ struct GETAPIResponse {
     origin: String,
 }
 
-
-fn create_event(event: Event, url: String) {
+fn create_event(event: Event, url: &String) {
     let client = reqwest::blocking::Client::new();
-     let response_event = client.post(url)
-    .header(CONTENT_TYPE, "application/json")
-    .json(&event)
-    .send()
-    .expect("dsd");
-    //.json::<Event>().expect("sdsd")
-println!("{:#?}", response_event);
+    let response_event = client
+        .post(url)
+        .header(CONTENT_TYPE, "application/json")
+        .json(&event)
+        .send()
+        .expect("dsd");
+    println!("{:#?}", response_event);
+}
+
+fn read_all_events(url: &String) {
+    let client = reqwest::blocking::Client::new();
+    let response_event = client
+        .get(url)
+        .header(CONTENT_TYPE, "application/json")
+        .send()
+        .expect("dsd")
+        .json::<Vec<Event>>()
+        .expect("sdsd");
+    for e in response_event {
+        print_event(e);
+    }
+}
+
+fn read_single_event(id: String, url: &String) {
+    let client = reqwest::blocking::Client::new();
+    let full_url = format!("{}/{}", url, id);
+    let response_event = client
+        .get(full_url)
+        .header(CONTENT_TYPE, "application/json")
+        .send()
+        .expect("dsd")
+        .json::<Event>()
+        .expect("sdsd");
+    print_event(response_event);
 }
 
 
 
-fn read_all_events(url: String) {
-    let client = reqwest::blocking::Client::new();
-     let response_event = client.get(url)
-    .header(CONTENT_TYPE, "application/json")
-    //.json(&event)
-    .send()
-    .expect("dsd")
-    .json::<Vec<Event>>().expect("sdsd");
-println!("{:#?}", response_event);
+fn print_event(event: Event) {
+    let valid = if event.verify() {
+        String::from("✓").green()
+    } else {
+        String::from("✗").red()
+    };
+    println!("({})[{}] {}",valid,pretty_time(event.created_at),event.content);
 }
 
-fn read_single_event(id: String,url: String) {
-    let client = reqwest::blocking::Client::new();
-    // TODO add id to url
-     let response_event = client.get(url)
-    .header(CONTENT_TYPE, "application/json")
-    .send()
-    .expect("dsd")
-    .json::<Event>().expect("sdsd");
-println!("{:#?}", response_event);
+
+
+fn pretty_time(time_stamp : u64) -> String {
+    let d = UNIX_EPOCH + Duration::from_secs(time_stamp);
+    let datetime = DateTime::<Utc>::from(d);
+    return datetime.format("%Y-%m-%d %H:%M:%S").to_string();
 }

@@ -1,6 +1,5 @@
 use clap::Parser;
-use crypto::create_key_pair;
-use entity::Event;
+use entity::{Event,KeyPair};
 use reqwest::{header::CONTENT_TYPE, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -44,11 +43,7 @@ fn main() {
 
 
     if args.generate_key {
-        let (private_key, public_key) = create_key_pair();
-        let kp = KeyPair {
-            private_key,
-            public_key,
-        };
+        let kp = KeyPair::generate();
         let serialized_kp = serde_json::to_string(&kp).unwrap();
         fs::write(&args.key_file, serialized_kp).expect("Unable to write file");
         return;
@@ -64,17 +59,13 @@ fn main() {
     };
     let key_pair: KeyPair = serde_json::from_str(&data).unwrap();
     let expiration_time = from_pretty_time(args.expiration_date);
-    let mut e = Event::new(key_pair.public_key, args.content, expiration_time);
-    e.sign(key_pair.private_key);
+    let mut e = Event::new(key_pair.public_key(), args.content, expiration_time);
+    e.sign(key_pair.private_key());
     create_event(e, &format!("{}/{}",&api_url,"events"));
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
-struct KeyPair {
-    public_key: String,
-    private_key: String,
-}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 struct GETAPIResponse {

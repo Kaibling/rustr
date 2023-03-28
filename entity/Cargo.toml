@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.157", features = ["derive"] }
 crypto = { path = "../crypto" }
+ulid = { version = "1.0.0", features = ["uuid"] }
+chrono = "0.4.24"

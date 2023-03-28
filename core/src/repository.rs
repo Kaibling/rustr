@@ -1,6 +1,5 @@
 use dyn_clone::DynClone;
-use entity::Event;
-use entity::User;
+use entity::{Event,User,Session};
 use std::collections::HashMap;
 use tracing::event;
 dyn_clone::clone_trait_object!(UserRepo);
@@ -99,8 +98,66 @@ impl UserRepoInMemory {
     }
 }
 
-// impl Clone for Box<dyn UserRepo> {
-//     fn clone(&self) -> Self {
-//         self.clone_box()
-//     }
-// }
+
+
+pub trait SessionRepo {
+    fn add(&mut self, e: Session);
+    fn read(&mut self, id: &String) -> Option<Session>;
+    fn read_all(&mut self) -> Vec<Session>;
+    fn delete(&mut self,id:&String);
+}
+#[derive(Clone)]
+pub struct SessionRepoInMemory {
+    sessions: HashMap<String, Session>,
+}
+
+impl SessionRepo for SessionRepoInMemory {
+    fn add(&mut self, u: Session) {
+        let n = u.get_id();
+        self.sessions.insert(n, u);
+    }
+    fn read(&mut self, id: &String) -> Option<Session> {
+        match self.sessions.get(id) {
+            Some(e) => {
+                let oe = e.to_owned();
+                if oe.expired(){
+                    let msg = format!("deleting {}",oe.id);
+                    event!(tracing::Level::INFO,msg);
+                    self.delete(&oe.id);
+                }
+                return Some(oe)
+            },
+            None => return None,
+
+        }
+    }
+    fn read_all(&mut self) -> Vec<Session> {
+        let mut res: Vec<Session> = Vec::new();
+        let mut obsoletes: Vec<String> = Vec::new();
+        for (_, v) in &self.sessions {
+            if !v.expired(){
+                res.push(v.clone());
+            } else {
+                obsoletes.push(v.id.clone());
+            }
+        }
+        for  v in obsoletes {
+            let msg = format!("deleting {}",v);
+            event!(tracing::Level::INFO,msg);
+            self.delete(&v);
+        }
+        return res;
+    }
+    fn delete(&mut self,id: &String) {
+        self.sessions.remove(id);
+    }
+}
+
+
+impl SessionRepoInMemory{
+    pub fn new() -> SessionRepoInMemory {
+        return SessionRepoInMemory {
+            sessions: HashMap::new(),
+        };
+    }
+}

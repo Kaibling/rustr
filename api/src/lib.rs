@@ -8,7 +8,9 @@ use axum::{
 use axum::http::Request;
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use core::repository::{self, SessionRepo};
+use core::repository::{SessionRepo,EventRepo,UserRepo};
+use core::repository::{SessionRepoInMemory,EventRepoInMemory,UserRepoInMemory};
+
 use entity::{User,Event, Session};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -16,10 +18,10 @@ use tower_http::trace::TraceLayer;
 use tracing::{Level,event};
 #[derive(Clone)]
 pub struct AppState {
-    user_repo: Arc<Mutex<Box<dyn repository::UserRepo + Send + Sync>>>,
-    event_repo: Arc<Mutex<Box<dyn repository::EventRepo + Send + Sync>>>,
-    session_repo: Arc<Mutex<Box<dyn repository::SessionRepo + Send + Sync>>>,
-    context : Arc<Mutex<Context>>,
+    user_repo: Arc<Mutex<Box<dyn UserRepo + Send + Sync>>>,
+    event_repo: Arc<Mutex<Box<dyn EventRepo + Send + Sync>>>,
+    session_repo: Arc<Mutex<Box<dyn SessionRepo + Send + Sync>>>,
+    //context : Arc<Mutex<Context>>,
 }
 #[derive(Clone)]
 struct Context {
@@ -28,16 +30,16 @@ struct Context {
 
 #[tokio::main]
 pub async fn main() {
-    let ur = repository::UserRepoInMemory::new();
-    let er = repository::EventRepoInMemory::new();
-    let sr = repository::SessionRepoInMemory::new();
+    let ur = UserRepoInMemory::new();
+    let er = EventRepoInMemory::new();
+    let sr = SessionRepoInMemory::new();
     let context = Context{private_key: None};
     
     let app_state = AppState {
         user_repo: Arc::new(Mutex::new(Box::new(ur))),
         event_repo: Arc::new(Mutex::new(Box::new(er))),
         session_repo: Arc::new(Mutex::new(Box::new(sr))),
-       context: Arc::new(Mutex::new(context)),
+       //context: Arc::new(Mutex::new(context)),
     };
     // tracing_subscriber::fmt()
     // .with_max_level(tracing::Level::DEBUG)
@@ -51,8 +53,8 @@ tracing_subscriber::fmt::init();
         .route("/events/:id", get(read_event))
         .route("/events", get(read_events))
         .route("/events", post(save_event))
-        .route("/authenticate", get(save_session))
         .layer(middleware::from_fn_with_state(app_state.clone(),test_middleware_mutex))
+        .route("/authenticate", post(save_session))
         //authenticate
         .layer(TraceLayer::new_for_http())
         .with_state(app_state)
@@ -120,7 +122,6 @@ async fn read_event(
 }
 
 async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<Event>) -> StatusCode {
-    //println!("->{:?}", &payload);
     let payload: Event = payload.0;
     let msg = format!("save event {} content '{}'",payload.id,payload.content);
     let mut r = state.event_repo.lock().await;//.expect("mutex was poisoned");
@@ -141,24 +142,22 @@ async fn save_session(headers: HeaderMap,State(state): State<AppState>) -> Statu
     let auth_parts = if auth_header.is_some(){
         auth_header.unwrap().to_str()
     } else {
-        return StatusCode::UNAUTHORIZED
+        return StatusCode::BAD_REQUEST
     };
 
     let auth_part = match  auth_parts {
         Ok(v) => v.split(" ").nth(1),
-        _ => return StatusCode::UNAUTHORIZED,
+        _ => return StatusCode::BAD_REQUEST,
     };
 
     let token = match  auth_part {
         Some(v) => v,
-        _ => return StatusCode::UNAUTHORIZED,
+        _ => return StatusCode::BAD_REQUEST,
     };
 
     println!("{:?}",token);
-    println!("hier");
-    let ctx = state.context.lock().await;//.expect("mutex was poisoned");
-    println!("hier2");
-    println!("session {}",ctx.private_key.as_ref().unwrap());
+    // let ctx = state.context.lock().await;//.expect("mutex was poisoned");
+    // println!("session {}",ctx.private_key.as_ref().unwrap());
 
     let mut session_repo = state.session_repo.lock().await;//.expect("mutex was poisoned");
 
@@ -182,20 +181,20 @@ async fn test_middleware_mutex<B>(
     let auth_parts = if auth_header.is_some(){
         auth_header.unwrap().to_str()
     } else {
-        return Err(StatusCode::UNAUTHORIZED)
+        return Err(StatusCode::BAD_REQUEST)
     };
 
     let auth_part = match  auth_parts {
         Ok(v) => v.split(" ").nth(1),
-        _ => return Err(StatusCode::UNAUTHORIZED),
+        _ => return Err(StatusCode::BAD_REQUEST),
     };
 
     let token = match  auth_part {
         Some(v) => v,
-        _ => return Err(StatusCode::UNAUTHORIZED),
+        _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    println!("{:?}",token);
+    println!("middleware {:?}",token);
 
     let mut sr = state.session_repo.lock().await;
     let  s =  sr.read(&token.to_string());

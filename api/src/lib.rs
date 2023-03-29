@@ -5,25 +5,39 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use core::repository;
-use entity::{User,Event};
-use std::sync::{Arc, Mutex};
+use axum::http::Request;
+use axum::middleware::{self, Next};
+use axum::response::Response;
+use core::repository::{self, SessionRepo};
+use entity::{User,Event, Session};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tower_http::trace::TraceLayer;
-use tracing::{span, Level,event};
+use tracing::{Level,event};
 #[derive(Clone)]
 pub struct AppState {
     user_repo: Arc<Mutex<Box<dyn repository::UserRepo + Send + Sync>>>,
     event_repo: Arc<Mutex<Box<dyn repository::EventRepo + Send + Sync>>>,
+    session_repo: Arc<Mutex<Box<dyn repository::SessionRepo + Send + Sync>>>,
+    context : Arc<Mutex<Context>>,
+}
+#[derive(Clone)]
+struct Context {
+    pub private_key : Option<String>
 }
 
 #[tokio::main]
 pub async fn main() {
     let ur = repository::UserRepoInMemory::new();
     let er = repository::EventRepoInMemory::new();
-
+    let sr = repository::SessionRepoInMemory::new();
+    let context = Context{private_key: None};
+    
     let app_state = AppState {
         user_repo: Arc::new(Mutex::new(Box::new(ur))),
         event_repo: Arc::new(Mutex::new(Box::new(er))),
+        session_repo: Arc::new(Mutex::new(Box::new(sr))),
+       context: Arc::new(Mutex::new(context)),
     };
     // tracing_subscriber::fmt()
     // .with_max_level(tracing::Level::DEBUG)
@@ -37,6 +51,9 @@ tracing_subscriber::fmt::init();
         .route("/events/:id", get(read_event))
         .route("/events", get(read_events))
         .route("/events", post(save_event))
+        .route("/authenticate", get(save_session))
+        .layer(middleware::from_fn_with_state(app_state.clone(),test_middleware_mutex))
+        //authenticate
         .layer(TraceLayer::new_for_http())
         .with_state(app_state)
         .fallback(handler_404);
@@ -59,7 +76,7 @@ async fn read_user(
     Path(user_id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<User>, (StatusCode, String)> {
-    let r = state.user_repo.lock().expect("mutex was poisoned");
+    let r = state.user_repo.lock().await;//.expect("mutex was poisoned");
     let user = r.read_user(&user_id);
     if user.is_some() {
         Ok(Json(user.unwrap().to_owned()))
@@ -74,7 +91,7 @@ async fn read_user(
 async fn save_user(State(state): State<AppState>, payload: axum::extract::Json<User>) -> StatusCode {
     println!("->{:?}", &payload);
     let payload: User = payload.0;
-    let mut r = state.user_repo.lock().expect("mutex was poisoned");
+    let mut r = state.user_repo.lock().await;//.expect("mutex was poisoned");
     r.add_user(payload);
     return StatusCode::CREATED;
 }
@@ -82,7 +99,7 @@ async fn save_user(State(state): State<AppState>, payload: axum::extract::Json<U
 
 
 async fn read_users(State(state): State<AppState>) -> Json<Vec<User>> {
-    let users = state.user_repo.lock().expect("mutex was poisoned");
+    let users = state.user_repo.lock().await;//.expect("mutex was poisoned");
     Json(users.read_all_users())
 }
 
@@ -91,7 +108,7 @@ async fn read_event(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let mut r = state.event_repo.lock().expect("mutex was poisoned");
+    let mut r = state.event_repo.lock().await;//.expect("mutex was poisoned");
     match r.read(&id){
         Some(event) => { 
         return Ok(Json(event.to_owned()))},
@@ -106,7 +123,7 @@ async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<
     //println!("->{:?}", &payload);
     let payload: Event = payload.0;
     let msg = format!("save event {} content '{}'",payload.id,payload.content);
-    let mut r = state.event_repo.lock().expect("mutex was poisoned");
+    let mut r = state.event_repo.lock().await;//.expect("mutex was poisoned");
     r.add(payload);
     event!(Level::INFO,msg);
     return StatusCode::CREATED;
@@ -115,6 +132,78 @@ async fn save_event(State(state): State<AppState>, payload: axum::extract::Json<
 
 
 async fn read_events(State(state): State<AppState>) -> Json<Vec<Event>> {
-    let mut events = state.event_repo.lock().expect("mutex was poisoned");
+    let mut events = state.event_repo.lock().await;//.expect("mutex was poisoned");
     Json(events.read_all())
+}
+
+async fn save_session(headers: HeaderMap,State(state): State<AppState>) -> StatusCode {
+    let auth_header = headers.get("authorization");
+    let auth_parts = if auth_header.is_some(){
+        auth_header.unwrap().to_str()
+    } else {
+        return StatusCode::UNAUTHORIZED
+    };
+
+    let auth_part = match  auth_parts {
+        Ok(v) => v.split(" ").nth(1),
+        _ => return StatusCode::UNAUTHORIZED,
+    };
+
+    let token = match  auth_part {
+        Some(v) => v,
+        _ => return StatusCode::UNAUTHORIZED,
+    };
+
+    println!("{:?}",token);
+    println!("hier");
+    let ctx = state.context.lock().await;//.expect("mutex was poisoned");
+    println!("hier2");
+    println!("session {}",ctx.private_key.as_ref().unwrap());
+
+    let mut session_repo = state.session_repo.lock().await;//.expect("mutex was poisoned");
+
+    session_repo.add(Session::new(token.to_string(), 0));
+    let msg = format!("new session for  {}", token.to_string());
+    event!(Level::INFO,msg);
+    return StatusCode::CREATED;
+}
+
+
+use axum::http::HeaderMap;
+
+async fn test_middleware_mutex<B>(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
+
+    let auth_header = headers.get("authorization");
+    let auth_parts = if auth_header.is_some(){
+        auth_header.unwrap().to_str()
+    } else {
+        return Err(StatusCode::UNAUTHORIZED)
+    };
+
+    let auth_part = match  auth_parts {
+        Ok(v) => v.split(" ").nth(1),
+        _ => return Err(StatusCode::UNAUTHORIZED),
+    };
+
+    let token = match  auth_part {
+        Some(v) => v,
+        _ => return Err(StatusCode::UNAUTHORIZED),
+    };
+
+    println!("{:?}",token);
+
+    let mut sr = state.session_repo.lock().await;
+    let  s =  sr.read(&token.to_string());
+    if s.is_some() {
+        println!("is da");
+    } else {
+        return Err(StatusCode::UNAUTHORIZED)
+    }
+    let response = next.run(request).await;
+        Ok(response)
 }
